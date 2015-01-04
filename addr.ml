@@ -45,3 +45,13 @@ let network_of_string s =
     end
 
 let to_unix = Ipaddr_unix.to_inet_addr
+
+let network_gen network =
+  let ipaddr = ref (init network) in
+  fun () ->
+    let value = (to_unix !ipaddr) in
+    if is_in !ipaddr network then begin
+      ipaddr := next !ipaddr;
+      Some value
+    end else
+      None

@@ -10,22 +10,12 @@ type probe_result = { ipaddr : Unix.inet_addr; port : int; status : port_status 
 
 let results, push_result = Lwt_stream.create ()
 
-let addr_gen network port_min port_max =
-  let ipaddr = ref (Addr.init network) in
-  let port = ref port_min in
-  fun () ->
-    let value = (Addr.to_unix !ipaddr, !port) in
-    if !port < port_max then begin
-      port := !port + 1;
-      Some value
-    end else begin
-      if Addr.is_in !ipaddr network then begin
-        port := port_min;
-        ipaddr := Addr.next !ipaddr;
-        Some value
-      end else
-        None
-    end
+let addr_gen prefix port_min port_max =
+  let open BatEnum in
+  let enum = cartesian_product
+      (from_while (Addr.network_gen prefix))
+      (range port_min ~until:port_max) in
+  fun () -> get enum
 
 let addrs ~slots network port_min port_max =
   let generator = addr_gen network port_min port_max in
