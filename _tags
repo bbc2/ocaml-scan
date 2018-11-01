@@ -1,2 +1,3 @@
-true: syntax(camlp4o), package(lwt.syntax), package(lwt.unix), package(ipaddr.unix)
+true: package(lwt_ppx), package(lwt.unix), package(ipaddr.unix)
 true: package(batteries)
+true: thread

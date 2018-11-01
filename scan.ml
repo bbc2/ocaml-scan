@@ -1,5 +1,3 @@
-open Lwt
-
 type port_status =
   | Open
   | Closed
@@ -19,30 +17,41 @@ let addr_gen prefix port_min port_max =
 
 let addrs ~slots network port_min port_max =
   let generator = addr_gen network port_min port_max in
-  Lwt_stream.from (fun () ->
-      Semaphore.wait slots >>
-      return (generator ()))
+  Lwt_stream.from
+    ( fun () ->
+        let%lwt () = Semaphore.wait slots in
+        Lwt.return (generator ())
+    )
 
 let try_connect ~timeout (ipaddr, port) =
-  let fd = try
+  let fd =
+    try
       Lwt_unix.(socket PF_INET SOCK_STREAM 0)
-    with Unix.Unix_error (Unix.EMFILE, _, _) -> failwith "Too many open sockets" in
-  try_lwt
-    Lwt_io.printf "Trying %s:%d\n" (Unix.string_of_inet_addr ipaddr) port >>
-    Lwt_unix.with_timeout timeout (fun () ->
-        Lwt_unix.(connect fd (ADDR_INET (ipaddr, port)))) >>
-    return Open
+    with
+    | Unix.Unix_error (Unix.EMFILE, _, _) -> failwith "Too many open sockets" in
+  try%lwt
+    let%lwt () = Lwt_io.printf "Trying %s:%d\n" (Unix.string_of_inet_addr ipaddr) port in
+    let%lwt () = Lwt_unix.with_timeout timeout (fun () ->
+        Lwt_unix.(connect fd (ADDR_INET (ipaddr, port)))
+      )
+    in
+    let%lwt () = Lwt_unix.close fd in
+    Lwt.return Open
   with
-  | Lwt_unix.Timeout -> return Timed_out
-  | Unix.Unix_error (Unix.ECONNREFUSED, _, _) -> return Closed
-  | Unix.Unix_error (e, _, _) -> return (Error e)
-  finally
-    Lwt_unix.close fd
+  | Lwt_unix.Timeout ->
+    let%lwt () = Lwt_unix.close fd in
+    Lwt.return Timed_out
+  | Unix.Unix_error (Unix.ECONNREFUSED, _, _) ->
+    let%lwt () = Lwt_unix.close fd in
+    Lwt.return Closed
+  | Unix.Unix_error (e, _, _) ->
+    let%lwt () = Lwt_unix.close fd in
+    Lwt.return (Error e)
 
 let probe ~slots ~timeout (ipaddr, port) =
-  lwt status = try_connect ~timeout (ipaddr, port) in
-  Semaphore.post slots >>
-  return (push_result (Some { ipaddr = ipaddr; port = port; status = status }))
+  let%lwt status = try_connect ~timeout (ipaddr, port) in
+  let%lwt () = Semaphore.post slots in
+  Lwt.return (push_result (Some { ipaddr = ipaddr; port = port; status = status }))
 
 let string_of_status = function
   | Open -> "open"
@@ -56,10 +65,12 @@ let string_of_result r =
 
 let main network port_min port_max =
   let slots = Semaphore.create 1000 in
-  join [
-    (Lwt_stream.iter_p (probe ~slots ~timeout:1.)
-       (addrs ~slots network port_min port_max) >>
-     (push_result None; return_unit));
+  Lwt.join [
+    ( let%lwt () =
+        Lwt_stream.iter_p (probe ~slots ~timeout:1.)
+          (addrs ~slots network port_min port_max) in
+      (push_result None; Lwt.return_unit)
+    );
     Lwt_stream.iter_s (fun r -> Lwt_io.printf "Result: %s\n" (string_of_result r)) results;
   ]
 
