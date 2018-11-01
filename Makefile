@@ -1,9 +1,9 @@
-.PHONY: all clean
+all: build
 
-all: scan.native
+.PHONY: build
+build:
+	dune build scan.exe
 
-%.native: *.ml
-	ocamlbuild -use-ocamlfind $@
-
+.PHONY: clean
 clean:
-	ocamlbuild -clean
+	dune clean

@@ -1,0 +1,13 @@
+(executable
+    (name scan)
+    (libraries
+        batteries
+        ipaddr.unix
+        lwt.unix
+    )
+    (preprocess
+        (pps
+            lwt_ppx
+        )
+    )
+)

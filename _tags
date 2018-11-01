@@ -1,3 +1,0 @@
-true: package(lwt_ppx), package(lwt.unix), package(ipaddr.unix)
-true: package(batteries)
-true: thread
