@@ -1,9 +1,14 @@
-all: build
+.PHONY: lint
+lint:
+	dune build @check
 
-.PHONY: build
-build:
-	dune build scan.exe
+.PHONY: check-format
+check-format:
+	dune build @fmt
 
-.PHONY: clean
-clean:
-	dune clean
+.PHONY: format
+format:
+	dune build @fmt --auto-promote
+
+.PHONY: check
+check: lint check-format

@@ -7,10 +7,9 @@ type port_status =
 type probe_result =
   { ipaddr : Unix.inet_addr
   ; port : int
-  ; status : port_status
-  }
+  ; status : port_status }
 
-let results, push_result = Lwt_stream.create ()
+let (results, push_result) = Lwt_stream.create ()
 
 let addr_gen prefix port_min port_max =
   let open BatEnum in
@@ -23,18 +22,14 @@ let addr_gen prefix port_min port_max =
 
 let addrs ~slots network port_min port_max =
   let generator = addr_gen network port_min port_max in
-  Lwt_stream.from
-    ( fun () ->
-        let%lwt () = Semaphore.wait slots in
-        Lwt.return (generator ())
-    )
+  Lwt_stream.from (fun () ->
+      let%lwt () = Semaphore.wait slots in
+      Lwt.return (generator ()))
 
 let try_connect ~timeout (ipaddr, port) =
   let fd =
-    try
-      Lwt_unix.(socket PF_INET SOCK_STREAM 0)
-    with
-    | Unix.Unix_error (Unix.EMFILE, _, _) ->
+    try Lwt_unix.(socket PF_INET SOCK_STREAM 0)
+    with Unix.Unix_error (Unix.EMFILE, _, _) ->
       failwith "Too many open sockets"
   in
   try%lwt
@@ -42,10 +37,8 @@ let try_connect ~timeout (ipaddr, port) =
       Lwt_io.printf "Trying %s:%d\n" (Unix.string_of_inet_addr ipaddr) port
     in
     let%lwt () =
-      Lwt_unix.with_timeout timeout
-        ( fun () ->
-            Lwt_unix.(connect fd (ADDR_INET (ipaddr, port)))
-        )
+      Lwt_unix.with_timeout timeout (fun () ->
+          Lwt_unix.(connect fd (ADDR_INET (ipaddr, port))))
     in
     let%lwt () = Lwt_unix.close fd in
     Lwt.return Open
@@ -80,25 +73,22 @@ let string_of_result r =
 let main network port_min port_max =
   let slots = Semaphore.create 1000 in
   Lwt.join
-    [ ( let%lwt () =
-          Lwt_stream.iter_p (probe ~slots ~timeout:1.)
-            (addrs ~slots network port_min port_max)
-        in
-        push_result None;
-        Lwt.return_unit
-      )
+    [ (let%lwt () =
+         Lwt_stream.iter_p (probe ~slots ~timeout:1.)
+           (addrs ~slots network port_min port_max)
+       in
+       push_result None;
+       Lwt.return_unit)
     ; Lwt_stream.iter_s
         (fun r -> Lwt_io.printf "Result: %s\n" (string_of_result r))
-        results
-    ]
+        results ]
 
 let usage () =
   Printf.printf "Usage: %s {network} {port_min} {port_max}\n" Sys.argv.(0);
   exit 1
 
 let () =
-  if Array.length Sys.argv < 4 then
-    usage ();
+  if Array.length Sys.argv < 4 then usage ();
   let network =
     match Addr.network_of_string Sys.argv.(1) with
     | Some n -> n

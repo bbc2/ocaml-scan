@@ -1,6 +1,5 @@
 module V4 = struct
-  let next i =
-    Ipaddr.V4.of_int32 (Int32.add (Ipaddr.V4.to_int32 i) 1l)
+  let next i = Ipaddr.V4.of_int32 (Int32.add (Ipaddr.V4.to_int32 i) 1l)
 
   let init = Ipaddr.V4.Prefix.network
 end
@@ -18,11 +17,11 @@ module V6 = struct
         else
           (i3, i2, Int32.add i1 1l, i0)
       else
-        (i3, i2, i1, Int32.add i0 1l) in
+        (i3, i2, i1, Int32.add i0 1l)
+    in
     Ipaddr.V6.of_int32 i'
 
-  let init n =
-    next (Ipaddr.V6.Prefix.network n)
+  let init n = next (Ipaddr.V6.Prefix.network n)
 end
 
 let next = function
@@ -35,23 +34,22 @@ let init = function
 
 let is_in = Ipaddr.Prefix.mem
 
-let network_of_string s = 
+let network_of_string s =
   match Ipaddr.Prefix.of_string s with
-  | Some n -> Some n
-  | None -> begin
-      match Ipaddr.of_string s with
-      | Some i -> Some (Ipaddr.Prefix.of_addr i)
-      | None -> None
-    end
+  | Ok n -> Some n
+  | Error _ -> (
+    match Ipaddr.of_string s with
+    | Ok i -> Some (Ipaddr.Prefix.of_addr i)
+    | Error _ -> None )
 
 let to_unix = Ipaddr_unix.to_inet_addr
 
 let network_gen network =
   let ipaddr = ref (init network) in
   fun () ->
-    let value = (to_unix !ipaddr) in
-    if is_in !ipaddr network then begin
+    let value = to_unix !ipaddr in
+    if is_in !ipaddr network then (
       ipaddr := next !ipaddr;
       Some value
-    end else
+    ) else
       None
